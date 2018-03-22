@@ -25,7 +25,8 @@ enum planck_layers {
   _QWERTY,
   _LOWER,
   _RAISE,
-  _UTILS
+  _UTILS,
+  _ADJUST
 };
 
 enum planck_keycodes {
@@ -42,7 +43,11 @@ enum planck_keycodes {
   MK_LAMBDAVAR,
   MK_CURRFLD,
   MK_PARFLD,
+  BACKLIT,
+  DYNAMIC_MACRO_RANGE
 };
+
+#include "dynamic_macro.h"
 
 enum {
   TD_Z_LESSTHAN = 0,
@@ -67,6 +72,9 @@ enum {
 #define LMBDV   MK_LAMBDAVAR
 #define CFLD    MK_CURRFLD
 #define PFLD    MK_PARFLD
+#define MREC1   DYN_REC_START1
+#define MSTOP1  DYN_REC_STOP
+#define MPLAY   DYN_MACRO_PLAY1
 /*
 qk_tap_dance_action_t tap_dance_actions[] = {
   [TD_Z_LESSTHAN] = ACTION_TAP_DANCE_DOUBLE(IT_Z, IT_LESS),
@@ -128,7 +136,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 [_RAISE] = {
   {IT_BKSL,   KC_7,     KC_8,     KC_9,     IT_SHRP,  _______,  _______,  _______, IT_APOS,   IT_AT,    IT_IACC,  KC_DEL},
   {_______,   KC_4,     KC_5,     KC_6,     TILDE,    _______,  _______,  _______, _______,   _______,  IT_LBRC,  IT_RBRC},
-  {IT_MORE,   IT_LESS,  KC_2,     KC_3,     BQUOT,    _______,  _______,  _______, _______,   _______,  IT_LPRN,  IT_RPRN},
+  {KC_LSHIFT, IT_LESS,  IT_MORE,  KC_3,     BQUOT,    _______,  _______,  _______, _______,   _______,  IT_LPRN,  IT_RPRN},
   {_______,   KC_0,     IT_DOT,   _______,  _______,  _______,  _______,  _______, IT_AACC,   IT_EACC,  IT_OACC,  IT_UACC}
 },
 
@@ -145,10 +153,18 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 
 [_UTILS] = {
-  { PWD,       IT_EXLM,   IT_DQOT,    IT_STRL,  IT_DLR,   IT_PERC,  IT_AMPR,  IT_SLSH,  IT_LPRN,  IT_RPRN,  IT_EQL,   _______  },
+  {_______,       IT_EXLM,   IT_DQOT,    IT_STRL,  IT_DLR,   IT_PERC,  IT_AMPR,  IT_SLSH,  IT_LPRN,  IT_RPRN,  IT_EQL,   _______  },
   {_______,    IT_DLR,    IT_PERC,    IT_AMPR,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______  },
   {_______,    _______,   _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  LMBD  },
   { CTRLAD,    _______,   _______,    _______,  _______,  _______,  _______,  _______,  _______,  PFLD,     CFLD,     LMBDV  }
+},
+
+
+[_ADJUST] = {
+  {    PWD,    _______,   _______,    _______,    MREC1,  _______,  _______,  _______,  _______,  _______,    MPLAY,  _______  },
+  {_______,    _______,    MSTOP1,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______  },
+  {_______,    _______,   _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______  },
+  {BACKLIT,    _______,   _______,    _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______,  _______  }
 }
 
 };
@@ -166,6 +182,11 @@ void led_set_keymap(uint8_t usb_led) {
 
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+
+  if (!process_record_dynamic_macro(keycode, record)) {
+      return false;
+  }
+
   switch (keycode) {
     case QWERTY:
       if (record->event.pressed) {
@@ -177,8 +198,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     case LOWER:
       if (record->event.pressed) {
         layer_on(_LOWER);
+        update_tri_layer(_LOWER, _RAISE, _ADJUST);
       } else {
         layer_off(_LOWER);
+        update_tri_layer(_LOWER, _RAISE, _ADJUST);
       }
       return false;
       break;
@@ -186,8 +209,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     case RAISE:
       if (record->event.pressed) {
         layer_on(_RAISE);
+        update_tri_layer(_LOWER, _RAISE, _ADJUST);
       } else {
         layer_off(_RAISE);
+        update_tri_layer(_LOWER, _RAISE, _ADJUST);
       }
       return false;
       break;
@@ -224,7 +249,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     case MK_PWD:
       if (record->event.pressed) {
-        /*If you hate your privacy you can type your password here */
+        // Put here your password if you hate yourself
       }
       return true;
       break;
@@ -271,6 +296,20 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         SEND_STRING(SS_UP(X_LSHIFT));
       }
       return true;
+      break;
+
+    case BACKLIT:
+      if (record->event.pressed) {
+        register_code(KC_RSFT);
+        #ifdef BACKLIGHT_ENABLE
+          backlight_step();
+        #endif
+        PORTE &= ~(1<<6);
+      } else {
+        unregister_code(KC_RSFT);
+        PORTE |= (1<<6);
+      }
+      return false;
       break;
   }
   return true;
